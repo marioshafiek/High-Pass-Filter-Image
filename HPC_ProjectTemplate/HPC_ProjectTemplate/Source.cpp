@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include<string.h>
 #include<msclr\marshal_cppstd.h>
+#include <mpi.h>
 #include <ctime>// include this header 
 #pragma once
 
@@ -115,8 +116,9 @@ int checkifOutOfBounds(int i, int j, int** arr_2D)
 //O(1)
 int ConvertIndex(int i, int j, int** arr_2d)
 {
-	double ArrOfValues[9];
+	int ArrOfValues[9];
 	double v = 0.1;
+	double value ;
 	ArrOfValues[0] = checkifOutOfBounds(i - 1, j - 1, arr_2d);
 	//cout <<ArrOfValues[0] << endl;
 	ArrOfValues[1] = checkifOutOfBounds(i - 1, j, arr_2d);
@@ -135,9 +137,9 @@ int ConvertIndex(int i, int j, int** arr_2d)
 	//cout <<ArrOfValues[7]<<endl;
 	ArrOfValues[8] = checkifOutOfBounds(i + 1, j + 1, arr_2d);
 	//cout <<ArrOfValues[8]<<endl;
-	double value = ((ArrOfValues[0] * v) + (ArrOfValues[1] * v) + (ArrOfValues[2] * v)) + ((ArrOfValues[3] * v) + (ArrOfValues[4]* v) + (ArrOfValues[5] * v)) + ((ArrOfValues[6] * v) + (ArrOfValues[7] * v) + (ArrOfValues[8] * v));
+	value = ((ArrOfValues[0] * v) + (ArrOfValues[1] * v) + (ArrOfValues[2] * v)) + ((ArrOfValues[3] * v) + (ArrOfValues[4]* v) + (ArrOfValues[5] * v)) + ((ArrOfValues[6] * v) + (ArrOfValues[7] * v) + (ArrOfValues[8] * v));
 	//cout << value << endl;
-	return int(value);	
+	return (int)value;	
 
 }
 //O(n2)
@@ -159,11 +161,10 @@ int main()
 	int start_s, stop_s, TotalTime = 0;
 	System::String^ imagePath;
 	std::string img;
-	img = "D://For University//HPC_ProjectTemplate//HPC_ProjectTemplate//Data//Input//N.png";
+	img = "D://For University//HPC_ProjectTemplate//HPC_ProjectTemplate//Data//Input//Image2.jpg";
 
 	imagePath = marshal_as<System::String^>(img);
 	int* imageData = inputImage(&ImageWidth, &ImageHeight, imagePath);
-
 
 	//Start MyCode
 	////////////////////////////////////////////////////////////
@@ -194,7 +195,7 @@ int main()
 	//Loop on Every Pixel on origial image and Apply on it "ConvertIndex" which do multiply between Pixel&neighbour and kernel
 	//and but the result on the new_arr_2D
 	//O(N2)
-	for (int i = 0; i < ImageHeight; i++)
+	/*for (int i = 0; i < ImageHeight; i++)
 	{
 		for (int j = 0; j < ImageWidth; j++)
 		{
@@ -205,20 +206,88 @@ int main()
 	//int* New_arr_1D = new int[ImageHeight * ImageWidth];
 
 	//O(N2)
-	convertFrom2D_TO_1D(New_arr_2D, imageData);
-	/*for (int i = 0; i < ImageHeight * ImageWidth; i++)
-	{
-		
-	{*/
+	convertFrom2D_TO_1D(New_arr_2D, imageData);*/
+
 
 	//End my code
 	//////////////////////////////////////////////////////
+	int* NewArr1 = new int[ImageHeight * ImageWidth];
+
+
 
 	start_s = clock();
-	createImage(imageData, ImageWidth, ImageHeight, 4);
-	stop_s = clock();
-	TotalTime += (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000;
-	cout << "time: " << TotalTime << endl;
+	
+	//MPI Part
+	MPI_Init(NULL, NULL);
+		
+	
+	int world_size;
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+
+		int sizeOfEachArray = (ImageHeight*ImageWidth)/12;
+		int *arrFotScater = new int[sizeOfEachArray];
+		int *arrForGather = new int[sizeOfEachArray];
+
+		/*if (rank == 0)
+		{
+			cout<<"Start 0";
+		}
+		if (rank == 1)
+		{
+			cout << "Start 1";
+		}
+		if (rank == 2)
+		{
+			cout << "Start 2";
+		}
+		if (rank == 3)
+		{
+			cout << "Start 3";
+		}
+		if (rank == 4)
+		{
+			cout << "Start 5";
+		}*/
+		/*char processor_name[MPI_MAX_PROCESSOR_NAME];
+		int namelength;
+		MPI_Get_processor_name(processor_name, &namelength);*/
+
+		//cout<<(processor_name, rank, world_size);
+		MPI_Scatter(imageData, sizeOfEachArray, MPI_INT, arrFotScater, sizeOfEachArray, MPI_INT, 0, MPI_COMM_WORLD);
+		//1 5 2 3  5 25  82 5 2 82 5 2 5 6 2 25 5 3 32 5 
+		//12 23 5 252  --  2 52 53 5 2  --  23 2 5 26 5 2 -- 35  26 58 65 6
+
+
+		//1 4 25 2 5 2 52 
+		// 2252 52 52 5  2 5 52 5 
+		// 2 5 2525 2 52 52 
+		//25 252 52 525  2 52 52 5 2 5  25252 5 25 2 5 25 
+
+		for(int i=0; i<sizeOfEachArray; i++)
+		{
+			int index = arrFotScater[i];
+			int indexInFirstMatrix = rank* sizeOfEachArray +i;
+			int indexi = indexInFirstMatrix%ImageWidth;
+			int indexj = abs(i-indexi) / ImageWidth;
+			arrForGather[i] = ConvertIndex(indexj, indexi, arr_2D);
+			cout << rank << endl;
+		}
+	 
+
+		MPI_Gather(arrForGather,sizeOfEachArray,MPI_INT, NewArr1,sizeOfEachArray,MPI_INT,0,MPI_COMM_WORLD);
+		MPI_Finalize();
+
+
+
+		createImage(NewArr1,ImageWidth, ImageHeight, 5);
+		stop_s = clock();
+		TotalTime += (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000;
+		cout << "time: " << TotalTime << endl;
+	
+	
 
 	free(imageData);
 	system("pause");
