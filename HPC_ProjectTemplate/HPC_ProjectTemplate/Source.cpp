@@ -99,7 +99,7 @@ void ConvertFrom1D_to_2D(int* arr_1D, int** arr_2D)
 
 }
 //O(1)
-int checkifOutOfBounds(int i, int j, int** arr_2D)
+int checkifOutOfBounds(int i, int j, int* arr_2D)
 {
 	int value;
 	if (i<0 || i>ImageHeight - 1 || j<0 || j>ImageWidth - 1)
@@ -109,12 +109,14 @@ int checkifOutOfBounds(int i, int j, int** arr_2D)
 	}
 	else
 	{
-		
-		return arr_2D[i][j];
+		//1D --> 2D 
+		//Index 2d --> 1D
+		int Index = i * ImageWidth + j;
+		return arr_2D[Index];
 	}
 }
 //O(1)
-int ConvertIndex(int i, int j, int** arr_2d)
+int ConvertIndex(int i, int j, int* arr_2d)
 {
 	int ArrOfValues[9];
 	double v = 0.1;
@@ -157,144 +159,87 @@ void convertFrom2D_TO_1D(int** arr_2d, int* arr)
 }
 int main()
 {
-	
+
+	//1D NewPixel
+	MPI_Init(NULL, NULL);
+	int world_size;	
+	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	int rank;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	int* imageData;
+	int* FinalArr;
 	int start_s, stop_s, TotalTime = 0;
 	System::String^ imagePath;
 	std::string img;
 	img = "D://For University//HPC_ProjectTemplate//HPC_ProjectTemplate//Data//Input//Image2.jpg";
-
 	imagePath = marshal_as<System::String^>(img);
-	int* imageData = inputImage(&ImageWidth, &ImageHeight, imagePath);
-
-	//Start MyCode
-	////////////////////////////////////////////////////////////
-
-	//Initizalize 2D Array to transfer data from 1D to 2D array
-	int** arr_2D;
-	arr_2D = new int* [ImageHeight];
-	//O(N)
-	for (int i = 0; i < ImageHeight; i++)
+	imageData = inputImage(&ImageWidth, &ImageHeight, imagePath);
+	FinalArr = new int[ImageHeight * ImageWidth];
+	cout << "Before rank 0" << endl;
+	if (rank == 0)
 	{
-		arr_2D[i] = new int[ImageWidth];
-	}
-
-	//Convert form 1D to 2D
-	//O(N2)
-	ConvertFrom1D_to_2D(imageData, arr_2D);
-
-	//Initialize new 2D array to recieve on it the calculation between the original image and Kernel
-	int** New_arr_2D;
-	New_arr_2D = new int* [ImageHeight];
-	//O(N)
-	for (int i = 0; i < ImageHeight; i++)
-	{
-		New_arr_2D[i] = new int[ImageWidth];
 		
+		cout << "Test" << endl;
+
+
 	}
-	
-	//Loop on Every Pixel on origial image and Apply on it "ConvertIndex" which do multiply between Pixel&neighbour and kernel
-	//and but the result on the new_arr_2D
-	//O(N2)
-	/*for (int i = 0; i < ImageHeight; i++)
+	/*for (int i = 0; i < ImageHeight * ImageWidth; i++)
 	{
-		for (int j = 0; j < ImageWidth; j++)
-		{
-			New_arr_2D[i][j] = ConvertIndex(i, j, arr_2D);
-			//cout << New_arr_2D[i][j] << endl;
-		}
-	}
-	//int* New_arr_1D = new int[ImageHeight * ImageWidth];
+		int indexI = i % ImageWidth;
+		int indexJ = abs(i - indexI) / ImageWidth;
+		FinalArr[i] = ConvertIndex(indexJ, indexI, imageData);
+	}*/
 
-	//O(N2)
-	convertFrom2D_TO_1D(New_arr_2D, imageData);*/
-
-
-	//End my code
-	//////////////////////////////////////////////////////
-	int* NewArr1 = new int[ImageHeight * ImageWidth];
-
-
-
-	start_s = clock();
 	
-	//MPI Part
-	MPI_Init(NULL, NULL);
-		
+
+
 	
-	int world_size;
-	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-	int rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	//MPI_Bcast(FinalArr, ImageHeight*ImageWidth, MPI_INT, 0, MPI_COMM_WORLD);
 
+	
 
-		int sizeOfEachArray = (ImageHeight*ImageWidth)/12;
+		int sizeOfEachArray = (ImageHeight*ImageWidth)/world_size;
 		int *arrFotScater = new int[sizeOfEachArray];
 		int *arrForGather = new int[sizeOfEachArray];
+		int* arrForFinal = new int[ImageHeight * ImageWidth];
 
-		/*if (rank == 0)
-		{
-			cout<<"Start 0";
-		}
-		if (rank == 1)
-		{
-			cout << "Start 1";
-		}
-		if (rank == 2)
-		{
-			cout << "Start 2";
-		}
-		if (rank == 3)
-		{
-			cout << "Start 3";
-		}
-		if (rank == 4)
-		{
-			cout << "Start 5";
-		}*/
-		/*char processor_name[MPI_MAX_PROCESSOR_NAME];
-		int namelength;
-		MPI_Get_processor_name(processor_name, &namelength);*/
-
-		//cout<<(processor_name, rank, world_size);
+		
+	
 		MPI_Scatter(imageData, sizeOfEachArray, MPI_INT, arrFotScater, sizeOfEachArray, MPI_INT, 0, MPI_COMM_WORLD);
-		//1 5 2 3  5 25  82 5 2 82 5 2 5 6 2 25 5 3 32 5 
-		//12 23 5 252  --  2 52 53 5 2  --  23 2 5 26 5 2 -- 35  26 58 65 6
 
-
-		//1 4 25 2 5 2 52 
-		// 2252 52 52 5  2 5 52 5 
-		// 2 5 2525 2 52 52 
-		//25 252 52 525  2 52 52 5 2 5  25252 5 25 2 5 25 
 
 		for(int i=0; i<sizeOfEachArray; i++)
 		{
-			int index = arrFotScater[i];
+			//int index = arrFotScater[i];
 			int indexInFirstMatrix = rank* sizeOfEachArray +i;
 			int indexi = indexInFirstMatrix%ImageWidth;
 			int indexj = abs(i-indexi) / ImageWidth;
-			arrForGather[i] = ConvertIndex(indexj, indexi, arr_2D);
-			cout << rank << endl;
+			arrForGather[i] = ConvertIndex(indexj, indexi, imageData);
+	
 		}
-	 
+		cout << "After forLoop" << endl;
+		MPI_Gather(arrForGather,sizeOfEachArray,MPI_INT, arrForFinal ,sizeOfEachArray,MPI_INT,0,MPI_COMM_WORLD);
+		if (rank == 0)
+		{
+			for (int i = 0; i < ImageHeight * ImageWidth; i++)
+			{
+				cout << arrForFinal[i] << endl;
+			}
+		}
+		cout << "After Gathering" << endl;
 
-		MPI_Gather(arrForGather,sizeOfEachArray,MPI_INT, NewArr1,sizeOfEachArray,MPI_INT,0,MPI_COMM_WORLD);
+		if (rank == 0)
+		{
+			createImage(arrForFinal, ImageWidth, ImageHeight, 5);
+		}
+		
+		free(imageData);
+		cout << "Before Finalize" << endl;
 		MPI_Finalize();
-
-
-
-		createImage(NewArr1,ImageWidth, ImageHeight, 5);
-		stop_s = clock();
-		TotalTime += (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000;
-		cout << "time: " << TotalTime << endl;
+		cout << "After Finalize" << endl;
 	
-	
-
-	free(imageData);
-	system("pause");
-
-	
+	//system("pause");
 	return 0;
-
 }
 
 
